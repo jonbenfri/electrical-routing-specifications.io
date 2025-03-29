@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Heater Routing, Heaters & Ground Traces Calculator</title>
+
+  <!-- Optional: If you have your own CSP meta, ensure you allow script-src 'self' -->
+  <!-- e.g.: <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self';"> -->
+
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 20px;
+      max-width: 1200px;
+    }
+    table {
+      border-collapse: collapse;
+      margin-bottom: 20px;
+      width: 100%;
+      max-width: 900px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      vertical-align: middle;
+    }
+    th {
+      background: #f2f2f2;
+      text-align: left;
+    }
+    #resultsTable th {
+      background: #e0ffe0; /* slightly different color for results table */
+    }
+    button {
+      padding: 8px 16px;
+      cursor: pointer;
+    }
+    #resultsSection {
+      border: 1px solid #aaa;
+      background: #fafafa;
+      padding: 15px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Heater Routing, Heaters &amp; Ground Traces Calculator</h1>
+  <p>
+    <em>
+      The Heater Routing and Heaters columns are partially synced:
+      changing the count or current in one column updates the other.
+      Ground current is computed via KCL.
+    </em>
+  </p>
+
+  <!-- INPUT TABLE -->
+  <table>
+    <thead>
+      <tr>
+        <th>Parameter</th>
+        <th>Heater Routing</th>
+        <th>Heaters</th>
+        <th>Ground Traces</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- Resistivity -->
+      <tr>
+        <td>Resistivity</td>
+        <td>
+          <input type="number" id="routingRho" value="0.06" step="any">
+          <span>uΩ·m</span>
+        </td>
+        <td>
+          <input type="number" id="heaterRho" value="0.61" step="any">
+          <span>uΩ·m</span>
+        </td>
+        <td>
+          <input type="number" id="groundRho" value="0.06" step="any">
+          <span>uΩ·m</span>
+        </td>
+      </tr>
+
+      <!-- Length -->
+      <tr>
+        <td>Length</td>
+        <td>
+          <input type="number" id="routingLength" value="6" step="any">
+          <span>mm</span>
+        </td>
+        <td>
+          <input type="number" id="heaterLength" value="0.340" step="any">
+          <span>mm</span>
+        </td>
+        <td>
+          <input type="number" id="groundLength" value="3" step="any">
+          <span>mm</span>
+        </td>
+      </tr>
+
+      <!-- Width -->
+      <tr>
+        <td>Width</td>
+        <td>
+          <input type="number" id="routingWidth" value="20" step="any">
+          <span>µm</span>
+        </td>
+        <td>
+          <input type="number" id="heaterWidth" value="4" step="any">
+          <span>µm</span>
+        </td>
+        <td>
+          <input type="number" id="groundWidth" value="20" step="any">
+          <span>µm</span>
+        </td>
+      </tr>
+
+      <!-- Height -->
+      <tr>
+        <td>Height</td>
+        <td>
+          <input type="number" id="routingHeight" value="600" step="any">
+          <span>nm</span>
+        </td>
+        <td>
+          <input type="number" id="heaterHeight" value="200" step="any">
+          <span>nm</span>
+        </td>
+        <td>
+          <input type="number" id="groundHeight" value="600" step="any">
+          <span>nm</span>
+        </td>
+      </tr>
+
+      <!-- Count -->
+      <tr>
+        <td>Count</td>
+        <td>
+          <input type="number" id="routingCount" value="1" min="1" step="any"
+                 oninput="syncCount('routing')">
+          <span>route</span>
+        </td>
+        <td>
+          <input type="number" id="heaterCount" value="1" min="1" step="any"
+                 oninput="syncCount('heater')">
+          <span>heater</span>
+        </td>
+        <td>
+          <input type="number" id="groundCount" value="1" min="1" step="any">
+          <span>ground</span>
+        </td>
+      </tr>
+
+      <!-- Current (mA) -->
+      <tr>
+        <td>Current</td>
+        <td>
+          <input type="number" id="routingCurrent" value="12" step="any"
+                 oninput="syncCurrent('routing')">
+          <span>mA</span>
+        </td>
+        <td>
+          <input type="number" id="heaterCurrent" value="12" step="any"
+                 oninput="syncCurrent('heater')">
+          <span>mA</span>
+        </td>
+        <td>
+          <!-- blank cell for ground current -->
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <button onclick="calculate()">Calculate</button>
+
+  <!-- RESULTS SECTION -->
+  <div id="resultsSection">
+    <h2>Results</h2>
+    <table id="resultsTable">
+      <thead>
+        <tr>
+          <th>Parameter</th>
+          <th>Heater Routing</th>
+          <th>Heaters</th>
+          <th>Ground Traces</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Count -->
+        <tr>
+          <td>Count</td>
+          <td id="resRoutingCount"></td>
+          <td id="resHeaterCount"></td>
+          <td id="resGroundCount"></td>
+        </tr>
+
+        <!-- Current (mA) -->
+        <tr>
+          <td>Current</td>
+          <td>
+            <span id="resRoutingSoloCurrent"></span>
+            <span>[mA]</span>
+          </td>
+          <td>
+            <span id="resHeaterSoloCurrent"></span>
+            <span>[mA]</span>
+          </td>
+          <td>
+            <span id="resGroundSoloCurrent"></span>
+            <span>[mA]</span>
+          </td>
+        </tr>
+
+        <!-- Resistance (Ω) -->
+        <tr>
+          <td>Resistance</td>
+          <td>
+            <span id="resRoutingResistance"></span>
+            <span>[Ω]</span>
+          </td>
+          <td>
+            <span id="resHeaterResistance"></span>
+            <span>[Ω]</span>
+          </td>
+          <td>
+            <span id="resGroundResistance"></span>
+            <span>[Ω]</span>
+          </td>
+        </tr>
+
+        <!-- Power (mW) -->
+        <tr>
+          <td>Power</td>
+          <td>
+            <span id="resRoutingPower"></span>
+            <span>[mW]</span>
+          </td>
+          <td>
+            <span id="resHeaterPower"></span>
+            <span>[mW]</span>
+          </td>
+          <td>
+            <span id="resGroundPower"></span>
+            <span>[mW]</span>
+          </td>
+        </tr>
+
+        <!-- Power Density (mW/mm) -->
+        <tr>
+          <td>Power Density</td>
+          <td>
+            <span id="resRoutingPowerDensity"></span>
+            <span>[mW/mm]</span>
+          </td>
+          <td>
+            <span id="resHeaterPowerDensity"></span>
+            <span>[mW/mm]</span>
+          </td>
+          <td>
+            <span id="resGroundPowerDensity"></span>
+            <span>[mW/mm]</span>
+          </td>
+        </tr>
+
+        <!-- Total Power (mW) -->
+        <tr>
+          <td><strong>Total Power</strong></td>
+          <td>
+            <span id="resRoutingTotalPower"></span>
+            <span>[mW]</span>
+          </td>
+          <td>
+            <span id="resHeaterTotalPower"></span>
+            <span>[mW]</span>
+          </td>
+          <td>
+            <span id="resGroundTotalPower"></span>
+            <span>[mW]</span>
+          </td>
+        </tr>
+      </tbody>
+
+      <tfoot>
+        <tr>
+          <th colspan="3">Combined Total Current</th>
+          <td>
+            <span id="resCombinedCurrent"></span>
+            <span>[mA]</span>
+          </td>
+        </tr>
+        <tr>
+          <th colspan="3">Combined Total Power</th>
+          <td>
+            <span id="resCombinedPower"></span>
+            <span>[mW]</span>
+          </td>
+        </tr>
+      </tfoot>
+
+    </table>
+  </div>
+
+  <!-- Link to external JS instead of inline, so GitHub Pages CSP won't complain about eval -->
+  <script src="script.js"></script>
+
+</body>
+</html>
+
